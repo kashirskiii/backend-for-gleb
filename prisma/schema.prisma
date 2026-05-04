@@ -1,0 +1,244 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ══════════════════════════════════════════════════════════════
+// ENUMS
+// ══════════════════════════════════════════════════════════════
+
+enum UserRole {
+  student
+  teacher
+}
+
+enum DialogStatus {
+  open
+  approved
+  rejected
+  closed
+}
+
+enum CheckStatus {
+  pending
+  processing
+  done
+  failed
+}
+
+enum ApprovalType {
+  system
+  teacher
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+enum MessageAuthorType {
+  student
+  teacher
+  system
+}
+
+enum EventType {
+  dialog_created
+  submission_added
+  check_completed
+  approval_updated
+  dialog_closed
+}
+
+// ══════════════════════════════════════════════════════════════
+// USERS
+// ══════════════════════════════════════════════════════════════
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  name         String
+  role         UserRole
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  studentDialogs Dialog[]       @relation("StudentDialogs")
+  teacherDialogs Dialog[]       @relation("TeacherDialogs")
+  messages       Message[]
+  events         Event[]
+  refreshTokens  RefreshToken[]
+
+  @@map("users")
+}
+
+// ══════════════════════════════════════════════════════════════
+// REFRESH TOKENS
+// ══════════════════════════════════════════════════════════════
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("refresh_tokens")
+}
+
+// ══════════════════════════════════════════════════════════════
+// DIALOGS
+// ══════════════════════════════════════════════════════════════
+
+model Dialog {
+  id        String       @id @default(uuid()) @db.Uuid
+  studentId String       @map("student_id") @db.Uuid
+  teacherId String       @map("teacher_id") @db.Uuid
+  title     String
+  status    DialogStatus @default(open)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  student     User         @relation("StudentDialogs", fields: [studentId], references: [id])
+  teacher     User         @relation("TeacherDialogs", fields: [teacherId], references: [id])
+  submissions Submission[]
+  events      Event[]
+
+  @@map("dialogs")
+}
+
+// ══════════════════════════════════════════════════════════════
+// SUBMISSIONS
+// ══════════════════════════════════════════════════════════════
+
+model Submission {
+  id        String   @id @default(uuid()) @db.Uuid
+  dialogId  String   @map("dialog_id") @db.Uuid
+  version   Int
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  dialog    Dialog     @relation(fields: [dialogId], references: [id])
+  files     File[]
+  check     Check?
+  messages  Message[]
+  approvals Approval[]
+
+  @@unique([dialogId, version])
+  @@map("submissions")
+}
+
+// ══════════════════════════════════════════════════════════════
+// FILES
+// ══════════════════════════════════════════════════════════════
+
+model File {
+  id           String   @id @default(uuid()) @db.Uuid
+  submissionId String   @map("submission_id") @db.Uuid
+  originalName String   @map("original_name")
+  path         String
+  mimeType     String?  @map("mime_type")
+  size         Int?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  submission Submission @relation(fields: [submissionId], references: [id])
+
+  @@map("files")
+}
+
+// ══════════════════════════════════════════════════════════════
+// CHECKS
+// ══════════════════════════════════════════════════════════════
+
+model Check {
+  id           String      @id @default(uuid()) @db.Uuid
+  submissionId String      @unique @map("submission_id") @db.Uuid
+  status       CheckStatus @default(pending)
+  startedAt    DateTime?   @map("started_at") @db.Timestamptz
+  finishedAt   DateTime?   @map("finished_at") @db.Timestamptz
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  submission Submission   @relation(fields: [submissionId], references: [id])
+  errors     CheckError[]
+
+  @@map("checks")
+}
+
+// ══════════════════════════════════════════════════════════════
+// CHECK ERRORS
+// ══════════════════════════════════════════════════════════════
+
+model CheckError {
+  id          String   @id @default(uuid()) @db.Uuid
+  checkId     String   @map("check_id") @db.Uuid
+  code        String
+  description String
+  location    String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  check Check @relation(fields: [checkId], references: [id])
+
+  @@map("check_errors")
+}
+
+// ══════════════════════════════════════════════════════════════
+// MESSAGES
+// ══════════════════════════════════════════════════════════════
+
+model Message {
+  id           String            @id @default(uuid()) @db.Uuid
+  submissionId String            @map("submission_id") @db.Uuid
+  authorId     String?           @map("author_id") @db.Uuid
+  authorType   MessageAuthorType @map("author_type")
+  content      String
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  submission Submission @relation(fields: [submissionId], references: [id])
+  author     User?      @relation(fields: [authorId], references: [id])
+
+  @@map("messages")
+}
+
+// ══════════════════════════════════════════════════════════════
+// APPROVALS
+// ══════════════════════════════════════════════════════════════
+
+model Approval {
+  id           String         @id @default(uuid()) @db.Uuid
+  submissionId String         @map("submission_id") @db.Uuid
+  type         ApprovalType
+  status       ApprovalStatus @default(pending)
+  comment      String?
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  submission Submission @relation(fields: [submissionId], references: [id])
+
+  // One approval per type per submission
+  @@unique([submissionId, type])
+  @@map("approvals")
+}
+
+// ══════════════════════════════════════════════════════════════
+// EVENTS
+// ══════════════════════════════════════════════════════════════
+
+model Event {
+  id        String    @id @default(uuid()) @db.Uuid
+  dialogId  String?   @map("dialog_id") @db.Uuid
+  actorId   String?   @map("actor_id") @db.Uuid
+  type      EventType
+  payload   Json      @default("{}")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  dialog Dialog? @relation(fields: [dialogId], references: [id])
+  actor  User?   @relation(fields: [actorId], references: [id])
+
+  @@map("events")
+}

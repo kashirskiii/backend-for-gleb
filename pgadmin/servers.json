@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "analysis-postgres",
+      "Group": "Docker",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "analysis_db",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "PassFile": "/pgpass"
+    }
+  }
+}
