@@ -1,106 +1,185 @@
 # analysis-api
 
-NestJS + Prisma + PostgreSQL + pgAdmin, fully containerised with Docker.
+REST API системы проверки студенческих работ на соответствие ГОСТ.  
+NestJS + Prisma + PostgreSQL + pgAdmin, полностью контейнеризировано через Docker.
 
 ## Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | NestJS 10 |
-| ORM | Prisma 5 |
-| Database | PostgreSQL 15 |
-| DB Admin | pgAdmin 4 |
-| Runtime | Node 20 Alpine |
 
-## Quick start
+| Слой           | Технология                      |
+| -------------- | ------------------------------- |
+| Framework      | NestJS 11                       |
+| ORM            | Prisma 5                        |
+| База данных    | PostgreSQL 15                   |
+| DB Admin       | pgAdmin 4                       |
+| Runtime        | Node 20 Alpine                  |
+| Аутентификация | JWT (access + refresh, ротация) |
+| Документация   | Swagger / OpenAPI               |
+
+
+## Быстрый старт
 
 ```bash
-# 1. Copy env and adjust if needed
+# 1. Скопировать env и при необходимости скорректировать
 cp .env.example .env
 
-# 2. Build and start all services
+# 2. Собрать и запустить все сервисы
 docker compose up -d --build
 
-# 3. Check that everything is running
+# 3. Проверить состояние контейнеров
 docker compose ps
 ```
 
-## Services
+## Сервисы
 
-| Service | URL / port |
-|---------|-----------|
-| NestJS API | http://localhost:3000/api |
-| Health check | http://localhost:3000/api/health |
-| pgAdmin | http://localhost:5050 |
-| PostgreSQL | localhost:5432 |
 
-### pgAdmin login
-- **Email:** admin@admin.com  
+| Сервис     | URL / порт                                                       |
+| ---------- | ---------------------------------------------------------------- |
+| NestJS API | [http://localhost:3000/api](http://localhost:3000/api)           |
+| Swagger UI | [http://localhost:3000/api/docs](http://localhost:3000/api/docs) |
+| pgAdmin    | [http://localhost:5050](http://localhost:5050)                   |
+| PostgreSQL | localhost:5432                                                   |
+
+
+### pgAdmin — вход
+
+- **Email:** [admin@admin.com](mailto:admin@admin.com)  
 - **Password:** admin  
-- The `analysis-postgres` server is pre-registered — no manual setup needed.
+- Сервер `analysis-postgres` зарегистрирован автоматически — ручная настройка не нужна.
 
-## Prisma commands
+## API
 
-Run against the **running** container:
+### Auth (`/api/auth`)
+
+
+| Метод | Путь            | Описание                                          |
+| ----- | --------------- | ------------------------------------------------- |
+| POST  | `/auth/login`   | Вход — возвращает пару access/refresh токенов     |
+| POST  | `/auth/refresh` | Обновление токенов (старый refresh аннулируется)  |
+| POST  | `/auth/logout`  | Выход — аннулирует refresh token (требует Bearer) |
+
+
+### Dialogs (`/api/dialogs`)
+
+
+| Метод | Путь       | Описание                                              |
+| ----- | ---------- | ----------------------------------------------------- |
+| POST  | `/dialogs` | Создать диалог + загрузить файл (multipart, до 20 МБ) |
+
+
+Интерактивная документация со всеми схемами запросов и ответов — **[http://localhost:3000/api/docs](http://localhost:3000/api/docs)**.
+
+## Доменная модель
+
+```
+User (student | teacher)
+ └─ Dialog (open → approved | rejected | closed)
+     └─ Submission (версии работы)
+         ├─ File (загруженные файлы)
+         ├─ Check (автоматическая проверка: pending → processing → done | failed)
+         │   └─ CheckError (найденные нарушения)
+         ├─ Message (переписка: student | teacher | system)
+         └─ Approval (system | teacher: pending → approved | rejected)
+```
+
+## Prisma
+
+Выполнять внутри **запущенного** контейнера:
 
 ```bash
-# Generate Prisma Client after schema changes
+# Сгенерировать Prisma Client после изменений схемы
 docker compose exec app npx prisma generate
 
-# Create and apply a new migration (dev)
+# Создать и применить миграцию (dev)
 docker compose exec app npx prisma migrate dev --name <migration-name>
 
-# Apply pending migrations (production / CI)
+# Применить pending-миграции (production / CI)
 docker compose exec app npx prisma migrate deploy
 
-# Open Prisma Studio (browser-based data explorer)
+# Открыть Prisma Studio (браузерный просмотрщик данных)
 docker compose exec app npx prisma studio --browser none
-# then open http://localhost:5555
+# затем открыть http://localhost:5555
 
-# Reset DB and re-run all migrations (dev only)
+# Сбросить БД и перезапустить все миграции (только dev)
 docker compose exec app npx prisma migrate reset
+
+# Заполнить БД тестовыми пользователями
+docker compose exec app npx ts-node --compiler-options '{"module":"CommonJS"}' prisma/seed.ts
 ```
 
-Or use the Makefile shortcuts:
+Или через Makefile:
 
 ```bash
-make up-build          # build + start
-make prisma-generate   # generate client
-make prisma-migrate    # create dev migration
-make prisma-studio     # open studio
-make logs              # tail app logs
-make down              # stop containers
-make down-volumes      # stop + delete volumes
+make up-build            # собрать и запустить
+make prisma-generate     # сгенерировать клиент
+make prisma-migrate      # создать dev-миграцию
+make prisma-migrate-prod # применить prod-миграции
+make prisma-studio       # открыть Studio
+make prisma-reset        # сбросить БД (dev)
+make logs                # логи app-контейнера
+make logs-all            # логи всех контейнеров
+make down                # остановить контейнеры
+make down-volumes        # остановить + удалить volumes
 ```
 
-## Local development (without Docker)
+### Seed-данные
 
-Requires a local PostgreSQL instance. Update `DATABASE_URL` in `.env` to point at `localhost`.
+После запуска seed создаются два тестовых пользователя:
+
+
+| Роль    | Email                                             | Пароль           |
+| ------- | ------------------------------------------------- | ---------------- |
+| teacher | [teacher@example.com](mailto:teacher@example.com) | teacher-password |
+| student | [student@example.com](mailto:student@example.com) | student-password |
+
+
+## Локальная разработка (без Docker)
+
+Требуется локальный PostgreSQL. В `.env` укажите `DATABASE_URL` с хостом `localhost`.
 
 ```bash
 npm install
 npm run start:dev
 ```
 
-## Project structure
+## Структура проекта
 
 ```
 .
 ├── src/
-│   ├── main.ts                  # bootstrap
+│   ├── main.ts                        # bootstrap, Swagger setup
 │   ├── app.module.ts
-│   ├── app.controller.ts
-│   ├── app.service.ts
+│   ├── swagger.config.ts
+│   ├── auth/
+│   │   ├── auth.controller.ts         # /auth/login, /refresh, /logout
+│   │   ├── auth.service.ts            # JWT generation, bcrypt, token rotation
+│   │   ├── auth.module.ts
+│   │   ├── dto/
+│   │   │   ├── login.dto.ts
+│   │   │   ├── refresh-token.dto.ts
+│   │   │   └── auth-tokens.response.dto.ts
+│   │   ├── guards/jwt-auth.guard.ts
+│   │   └── strategies/jwt.strategy.ts
+│   ├── dialogs/
+│   │   ├── dialogs.controller.ts      # POST /dialogs (multipart)
+│   │   ├── dialogs.service.ts         # создание диалога + сохранение файла
+│   │   ├── dialogs.module.ts
+│   │   └── dto/
+│   │       ├── create-dialog.dto.ts
+│   │       └── create-dialog-response.dto.ts
 │   └── prisma/
-│       ├── prisma.module.ts     # global Prisma module
-│       └── prisma.service.ts    # PrismaClient wrapper
+│       ├── prisma.module.ts           # глобальный PrismaModule
+│       └── prisma.service.ts          # обёртка PrismaClient
 ├── prisma/
-│   └── schema.prisma            # data model
+│   ├── schema.prisma                  # схема данных
+│   └── seed.ts                        # тестовые пользователи
+├── scripts/
+│   └── generate-openapi.ts            # генерация openapi.yaml
 ├── pgadmin/
-│   └── servers.json             # auto-registered pgAdmin server
-├── Dockerfile                   # multi-stage build
+│   └── servers.json                   # авторегистрация сервера pgAdmin
+├── Dockerfile                         # multi-stage build
 ├── docker-compose.yml
-├── .env.example
-└── Makefile
+├── Makefile
+└── .env.example
 ```
-# backend-for-gleb
+

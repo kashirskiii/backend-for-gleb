@@ -22,7 +22,8 @@
     "prisma:studio": "prisma studio",
     "prisma:reset": "prisma migrate reset",
     "prisma:seed": "ts-node prisma/seed.ts",
-    "generate:openapi": "ts-node scripts/generate-openapi.ts"
+    "generate:openapi": "ts-node scripts/generate-openapi.ts",
+    "generate:types": "orval"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

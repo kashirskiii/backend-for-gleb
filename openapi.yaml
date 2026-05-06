@@ -1,4 +1,11 @@
 openapi: 3.0.0
+info:
+  title: Analysis API
+  description: API системы проверки студенческих работ на соответствие ГОСТ
+  version: '1.0'
+servers:
+  - url: http://localhost:3000
+    description: Local development
 paths:
   /api:
     get:
@@ -26,9 +33,7 @@ paths:
           content:
             application/json:
               schema:
-                example:
-                  status: ok
-                  timestamp: '2026-05-03T14:00:00.000Z'
+                $ref: '#/components/schemas/HealthResponseDto'
       summary: Health check
       tags:
         - App
@@ -95,8 +100,7 @@ paths:
           content:
             application/json:
               schema:
-                example:
-                  message: Logged out successfully
+                $ref: '#/components/schemas/LogoutResponseDto'
         '401':
           description: Access token отсутствует или недействителен, либо refresh token не найден
       security:
@@ -107,8 +111,8 @@ paths:
   /api/dialogs:
     post:
       description: >-
-        Студент создаёт диалог с преподавателем и загружает первую версию работы. Одновременно создаётся Submission v1 и
-        запись File с путём к сохранённому файлу.
+        Студент создаёт диалог с преподавателем и загружает первую версию работы.
+        Одновременно создаётся Submission v1 и запись File с путём к сохранённому файлу.
       operationId: DialogsController_create
       parameters: []
       requestBody:
@@ -148,20 +152,34 @@ paths:
       summary: Создать диалог
       tags:
         - Dialogs
-info:
-  title: Analysis API
-  description: API системы проверки студенческих работ на соответствие ГОСТ
-  version: '1.0'
-  contact: {}
-tags: []
-servers: []
 components:
   securitySchemes:
     access-token:
+      type: http
       scheme: bearer
       bearerFormat: JWT
-      type: http
   schemas:
+    HealthResponseDto:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-05-03T14:00:00.000Z'
+      required:
+        - status
+        - timestamp
+    LogoutResponseDto:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Logged out successfully
+      required:
+        - message
     LoginDto:
       type: object
       properties:
@@ -218,8 +236,8 @@ components:
             - closed
           example: open
         createdAt:
-          format: date-time
           type: string
+          format: date-time
       required:
         - id
         - studentId
@@ -242,8 +260,8 @@ components:
         comment:
           type: string
         createdAt:
-          format: date-time
           type: string
+          format: date-time
       required:
         - id
         - dialogId
@@ -267,8 +285,8 @@ components:
           type: number
           description: Размер в байтах
         createdAt:
-          format: date-time
           type: string
+          format: date-time
       required:
         - id
         - originalName
